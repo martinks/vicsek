@@ -15,38 +15,68 @@ Created by Martin Klein Schaarberg
 
 '''
 import numpy as np
-
 from bokeh.io import curdoc
 from bokeh.layouts import row, widgetbox
-from bokeh.models import ColumnDataSource, Range1d
+from bokeh.models import ColumnDataSource
 from bokeh.models.widgets import Slider, Button, RadioButtonGroup, Div
 from bokeh.plotting import figure
 
+# initial values
+nu = 0.1
+eta = 0.1
+N = 300
+L = 25
+r = 1
+
+# fixed parameters
+dt = 1
+wedge_radius = L/50
+wedge_angle = np.radians(30)
+particle_fill_alpha = 0.5
+particle_line_alpha = 1
+circle_fill_alpha = 0.1
+circle_line_alpha = 1
+
 def random_particles(N,L):
+    # generate randomly positioned particles with random direction
     x = np.random.rand(N,2)*L
     theta = (np.random.rand(N,1)-0.5)*2*np.pi
-    return x, theta
-
-def identify_groups(x,old_groups):
-    groups = np.zeros(x.shape[0])
-
-
-def update_angle(x0,x,theta,eta,r):
-    dx = x - x0
-    in_neighbourhood = dx[:,0]**2 + dx[:,1]**2 <= r**2
-    dtheta = eta*(np.random.rand(1)-0.5)
-    average_theta = np.arctan2(np.mean(np.sin(theta[in_neighbourhood])),
-                               np.mean(np.cos(theta[in_neighbourhood])))    
-    return average_theta + dtheta
+    return x,theta
 
 def initialize_data():
+    # reset plot
     N = NSlider.value
     L = LSlider.value
     r = rSlider.value
     x, theta = random_particles(N,L)
-    source.data = dict( x=x[:,0], y=x[:,1],t=np.zeros(theta.shape),theta=theta,start_angle=theta-wedge_angle/2+np.pi,end_angle=theta+wedge_angle/2+np.pi,r=r*np.ones(theta.shape))
+    source.data = dict( 
+        x=x[:,0], 
+        y=x[:,1],
+        t=np.zeros(theta.shape),
+        theta=theta,
+        start_angle=theta - wedge_angle/2 + np.pi,
+        end_angle=theta + wedge_angle/2 + np.pi,
+        r=r*np.ones(theta.shape))
+
+def update_particles(x,theta,t,eta,nu):
+    # compute new particle positions and directions
+    def update_angle(x0,x,theta,eta,r):
+        dx = x - x0
+        in_neighbourhood = dx[:,0]**2 + dx[:,1]**2 <= r**2
+        dtheta = eta*(np.random.rand(1)-0.5)
+        average_theta = np.arctan2(np.mean(np.sin(theta[in_neighbourhood])),
+                                   np.mean(np.cos(theta[in_neighbourhood])))    
+        return average_theta + dtheta
+
+    theta = np.apply_along_axis(update_angle,1, x,x,theta,eta,r)
+    v = nu*np.column_stack((np.cos(theta),np.sin(theta)))
+    x = x + v*dt
+    t = t + dt
+    return x, theta, t, v
 
 def update_data():
+    # update plot
+    
     # Get the current slider values
     eta = etaSlider.value
     nu = nuSlider.value
@@ -54,13 +84,11 @@ def update_data():
     N = NSlider.value
     r = rSlider.value
 
+    # get current position
     x,theta,t  = np.column_stack((source.data['x'],source.data['y'])), source.data['theta'], source.data['t']
 
     # compute new positions
-    t = t + dt
-    theta = np.apply_along_axis(update_angle,1, x,x,theta,eta,r)
-    v = nu*np.column_stack((np.cos(theta),np.sin(theta)))
-    x = x + v*dt
+    x,theta,t,v = update_particles(x,theta,t,eta,nu)
 
     # density and average normalized velocity
     rho = N/L**2
@@ -75,24 +103,26 @@ def update_data():
     plot.title.text = 'Time: %d, Density: %.2g, Average velocity: %.2f' % (t[0],rho, nu_a)
 
 def toggle_draw(new):
+    # switch between boids and circles of interaction
     if toggleDraw.active == 0:
         particles.glyph.fill_alpha = particle_fill_alpha
-        particles.glyph.line_alpha = 1
+        particles.glyph.line_alpha = particle_line_alpha
         circles.glyph.fill_alpha = 0
         circles.glyph.line_alpha = 0   
     else:
         particles.glyph.fill_alpha = 0
         particles.glyph.line_alpha = 0
         circles.glyph.fill_alpha = circle_fill_alpha
-        circles.glyph.line_alpha = 1
+        circles.glyph.line_alpha = circle_line_alpha
 
 def update_axis(attr,old,new):
+    # update axis 
     L = LSlider.value
     plot.x_range.end = L
     plot.y_range.end = L
 
 def add_remove_particles(attr,old,new):
-    global x, theta
+    x,theta,t  = np.column_stack((source.data['x'],source.data['y'])), source.data['theta'], source.data['t']
     N = NSlider.value
     L = NSlider.value
     if N <= len(theta):
@@ -102,20 +132,8 @@ def add_remove_particles(attr,old,new):
         x_new, theta_new = random_particles(N - len(theta),L)
         x = np.concatenate((x,x_new),axis=0)
         theta = np.concatenate((theta,theta_new),axis=0)
-
-# Set up defaults
-nu = 0.1
-eta = 0.1
-N = 300
-L = 25
-
-# fixed parameters
-dt = 1
-r = 1
-wedge_radius = L/50
-wedge_angle = np.radians(30)
-particle_fill_alpha = 0.5
-circle_fill_alpha = 0.1
+        theta = np.concatenate((t,theta_new),axis=0)
+    source.data = dict( x=x[:,0], y=x[:,1],t=t[0]*np.ones(theta.shape),theta=theta,start_angle=theta-wedge_angle/2+np.pi,end_angle=theta+wedge_angle/2+np.pi,r=r*np.ones(theta.shape))
 
 # Set up plot
 source = ColumnDataSource(data=dict(x=[], y=[],t=[],theta=[],start_angle=[],end_angle=[],r=[]))
@@ -123,7 +141,7 @@ plot = figure(plot_height=400, plot_width=400,
               tools="",logo=None,
               x_range=[0, L], y_range=[0,L])
 particles = plot.wedge('x', 'y', wedge_radius,'start_angle','end_angle',source=source,radius_units='data',fill_alpha=particle_fill_alpha)
-circles = plot.circle('x', 'y',radius='r',source=source,fill_alpha=0,line_alpha=0)
+circles = plot.circle('x', 'y',radius='r',source=source,fill_alpha=0,line_alpha=0,line_width=0.3)
 plot.xgrid.grid_line_color = None
 plot.ygrid.grid_line_color = None
 plot.background_fill_color = "#000000"

@@ -158,7 +158,7 @@ titleDiv = Div(text="""<h1>Self-ordered motion in a system of particles</h1>""")
 descriptionDiv = Div(text="""<p>This app demonstrates the emergence of self-ordered motion in a particle system governed by one simple rule:</p>
 <p><em>At each time step a given particle driven with a constant absolute velocity assumes the average direction of motion of the particles in its neighborhood of radius r with some random perturbation added.</em></p>
 <p>For more details, see Vicsek <em>et. al.</em>, Phys. Rev. Lett. <b>75</b>, 1226-1229 (1995)</p>
-<p style="font-size:80%">This app was built using <a href="bokeh.pydata.org">Bokeh</a> by <a href="http://www.martinkleinschaarsberg.nl">Martin Klein Schaarsberg</a>""")
+<p style="font-size:80%">This app was built using <a href="http://bokeh.pydata.org">Bokeh</a> by <a href="http://www.martinkleinschaarsberg.nl">Martin Klein Schaarsberg</a>""")
 nuSlider = Slider(title="Velocity", value=nu, start=0, end=1, step=0.01)
 etaSlider = Slider(title="Perturbation", value=eta, start=0, end=2*np.pi, step=0.1)
 rSlider = Slider(title="Interaction radius", value=r, start=0, end=10, step=0.1)

@@ -27,6 +27,10 @@ def random_particles(N,L):
     theta = (np.random.rand(N,1)-0.5)*2*np.pi
     return x, theta
 
+def identify_groups(x,old_groups):
+    groups = np.zeros(x.shape[0])
+
+
 def update_angle(x0,x,theta,eta,r):
     dx = x - x0
     in_neighbourhood = dx[:,0]**2 + dx[:,1]**2 <= r**2
@@ -35,35 +39,31 @@ def update_angle(x0,x,theta,eta,r):
                                np.mean(np.cos(theta[in_neighbourhood])))    
     return average_theta + dtheta
 
-def update_plot(x,theta,r):
-    source.data = dict( x=x[:,0], y=x[:,1],start_angle=theta-wedge_angle/2+np.pi,end_angle=theta+wedge_angle/2+np.pi,r=r*np.ones(theta.shape))
-
 def initialize_data():
-    global x,theta,t
     N = NSlider.value
     L = LSlider.value
     r = rSlider.value
-    t = 0
     x, theta = random_particles(N,L)
-    update_plot(x,theta,r)
-    return x, theta, t
+    source.data = dict( x=x[:,0], y=x[:,1],t=np.zeros(theta.shape),theta=theta,start_angle=theta-wedge_angle/2+np.pi,end_angle=theta+wedge_angle/2+np.pi,r=r*np.ones(theta.shape))
 
 def update_data():
     # Get the current slider values
-    global x, theta, t
     eta = etaSlider.value
     nu = nuSlider.value
     L = LSlider.value
     N = NSlider.value
     r = rSlider.value
+
+    x,theta,t  = np.column_stack((source.data['x'],source.data['y'])), source.data['theta'], source.data['t']
+
     # compute new positions
-    rho = N/L**2
     t = t + dt
     theta = np.apply_along_axis(update_angle,1, x,x,theta,eta,r)
     v = nu*np.column_stack((np.cos(theta),np.sin(theta)))
     x = x + v*dt
 
-    # average normalized velocity
+    # density and average normalized velocity
+    rho = N/L**2
     nu_a = 1/(N*nu)*np.linalg.norm(np.sum(v,axis=0))
 
     # apply periodic boundary condition
@@ -71,8 +71,8 @@ def update_data():
     x[x<0] += L
     
     # update plot
-    update_plot(x,theta,r)
-    plot.title.text = 'Time: %d, Density: %.2g, Average velocity: %.2f' % (t,rho, nu_a)
+    source.data = dict( x=x[:,0], y=x[:,1],t=t,theta=theta,start_angle=theta-wedge_angle/2+np.pi,end_angle=theta+wedge_angle/2+np.pi,r=r*np.ones(theta.shape))
+    plot.title.text = 'Time: %d, Density: %.2g, Average velocity: %.2f' % (t[0],rho, nu_a)
 
 def toggle_draw(new):
     if toggleDraw.active == 0:
@@ -103,9 +103,8 @@ def add_remove_particles(attr,old,new):
         x = np.concatenate((x,x_new),axis=0)
         theta = np.concatenate((theta,theta_new),axis=0)
 
-
 # Set up defaults
-nu = 0.03
+nu = 0.1
 eta = 0.1
 N = 300
 L = 25
@@ -119,7 +118,7 @@ particle_fill_alpha = 0.5
 circle_fill_alpha = 0.1
 
 # Set up plot
-source = ColumnDataSource(data=dict(x=[], y=[],start_angle=[],end_angle=[],r=[]))
+source = ColumnDataSource(data=dict(x=[], y=[],t=[],theta=[],start_angle=[],end_angle=[],r=[]))
 plot = figure(plot_height=400, plot_width=400, 
               tools="",logo=None,
               x_range=[0, L], y_range=[0,L])
@@ -157,7 +156,7 @@ resetButton.on_click(initialize_data)
 toggleDraw.on_click(toggle_draw)
 
 # Set up layouts and add to document
-x, theta,t = initialize_data()
+initialize_data()
 inputs = widgetbox(titleDiv,nuSlider,etaSlider,rSlider,NSlider,LSlider,resetButton,toggleDraw,descriptionDiv)
 curdoc().add_root(row(plot,inputs, width=800))
 curdoc().title = "Self-ordered motion in a system of particles"
